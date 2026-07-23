@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # myflora-dna-portfolio
 
 Synthetic cultivation data generation and crop yield prediction pipeline.
@@ -46,5 +45,34 @@ src/myflora/generator/
 tests/generator/   # mirrors the module layout above
 ```
 =======
-# myfloradna-portfolio
->>>>>>> 0c9fc07262b3f81d08ebca28a0ce26e0c286f125
+
+## Validate a dataset
+
+```
+python -c "
+import pandas as pd
+from myflora.validation.plausibility import find_plausibility_violations
+from myflora.validation.reproducibility import hash_dataframe
+
+readings = pd.read_parquet('data/raw/readings.parquet')
+metadata = pd.read_parquet('data/raw/batch_metadata.parquet')
+print(find_plausibility_violations(readings, metadata))
+print(hash_dataframe(readings))
+"
+```
+
+`myflora.validation.plausibility` flags (batch, sensor) combinations whose
+NaN or out-of-bounds count exceeds what fault injection alone could
+plausibly produce (a Poisson-quantile threshold on `n * fault_rate / 3`,
+the dropout/spike share of fault events) -- an empty result means the
+dataset is clean. `myflora.validation.reproducibility` hashes DataFrames
+(`hash_dataframe`) and can call a generator function twice to confirm
+bit-exact reproducibility (`is_bit_exact_reproducible`).
+
+```
+src/myflora/validation/
+    plausibility.py     # bounds/NaN-rate checks vs. each batch's fault_rate
+    reproducibility.py  # DataFrame hashing + bit-exact reproducibility check
+tests/validation/        # mirrors the module layout above
+```
+

@@ -6,3 +6,5 @@ __pycache__/
 venv/
 data/raw/*.parquet
 data/interim/*.parquet
+.claude/
+.idea/
