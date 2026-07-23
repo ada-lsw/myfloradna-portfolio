@@ -1,9 +1,10 @@
 # myflora-dna-portfolio
 
 Synthetic cultivation data generation and crop yield prediction pipeline.
-See [SPEC.md](SPEC.md) for the full project plan. Phases 1-3 (synthetic
-data generator, validation suite, feature engineering) are implemented;
-later phases are not yet built.
+See [SPEC.md](SPEC.md) for the full project plan. Phases 1-4 (synthetic
+data generator, validation suite, feature engineering, gradient boosting
+yield model) are implemented; Phase 5 (documentation polish) and the
+RNN/transformer comparison called out in Phase 4 are not yet built.
 
 ## Setup
 
@@ -115,5 +116,71 @@ src/myflora/features/
     io.py        # Parquet read/write helpers
     cli.py       # `myflora-features` entry point
 tests/features/  # mirrors the module layout above
+```
+
+## Generate yield labels and train a model
+
+```
+python -m myflora.model.cli --features-path data/interim/batch_features.parquet
+```
+
+or the installed console script: `myflora-train` (`--test-fraction`,
+`--master-seed`, and output-path options available; see `--help`).
+
+There's no real yield data, so labels are synthetic:
+`yield = base_yield + max_yield_gain * closeness_score + noise`, where
+`closeness_score` is the (optionally sensor-weighted) average across
+sensors of `1 - {sensor}_stress_event_fraction` -- i.e. how much of each
+batch's time was spent inside that sensor's optimal range, reusing the
+Phase 3 feature directly rather than recomputing anything from raw
+readings. `noise_sigma` defaults to 8 (`YieldLabelConfig`), calibrated
+against the *default* generator/feature config: its fault rates and OU
+mean-reversion keep batches fairly uniformly well-controlled, so
+`closeness_score` only varies by about 0.05 (std) batch-to-batch across a
+default 60-batch run -- the original illustrative guess of 30 drowned
+that signal out entirely (oracle in-sample R² ~0.1 for a linear fit of
+yield on closeness_score alone, i.e. unlearnable by any model). At 8, the
+oracle fit reaches R² ~0.7. If you regenerate data with very different
+fault rates or OU parameters, re-check this calibration.
+
+The model is a gradient boosting regressor (`xgboost.XGBRegressor`),
+trained on every numeric feature column except `batch_id`/`yield`/
+`closeness_score`. `TrainConfig`'s defaults are deliberately conservative
+(50 shallow trees, depth 2, `reg_lambda=5`) rather than XGBoost's
+out-of-the-box defaults: with ~48 training rows against ~28 features (the
+default dataset's 80/20 split), a larger/deeper ensemble memorizes the
+training set (train R² ~0.999) and generalizes worse than predicting the
+mean (test R² < 0) -- verified empirically while tuning these. With the
+current defaults, test R² typically lands around 0.2-0.4 depending on the
+train/test split seed (`--master-seed`) -- a small, noisy dataset, so
+expect that kind of run-to-run spread rather than a single "true" number.
+The train/test split itself (`myflora.model.split.split_batches`) uses
+`np.random.default_rng` directly rather than scikit-learn's
+`train_test_split`, keeping the project's "Generator API only" convention
+consistent through every pipeline stage, not just data generation.
+
+Each run appends one JSON record (config, feature columns, train/test
+metrics, and the saved model artifact's path) to
+`models/experiment_log.jsonl` -- read it back with
+`myflora.model.tracking.read_runs(log_path)`. That log entry doubles as a
+lightweight model registry: it's the pointer from a run's config/metrics
+back to its saved artifact (`models/yield_xgb.json`, XGBoost's native
+format, loadable via `myflora.model.train.load_model`).
+
+**Out of scope for this pass:** SPEC.md's Phase 4 also calls for a simple
+RNN/transformer trained directly on the raw per-batch time series, for
+comparison against this gradient-boosting-on-aggregated-features
+baseline. Not implemented here -- see the module docstring in
+`src/myflora/model/train.py`.
+
+```
+src/myflora/model/
+    config.py     # YieldLabelConfig, TrainConfig
+    labels.py     # compute_yield_labels (synthetic ground truth)
+    split.py       # split_batches (Generator-based train/test split)
+    train.py        # train_yield_model, metrics, save_model/load_model
+    tracking.py      # build_run_record, log_run, read_runs (experiment log)
+    cli.py            # `myflora-train` entry point
+tests/model/      # mirrors the module layout above
 ```
 
