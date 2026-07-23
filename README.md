@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # myflora-dna-portfolio
 
 Synthetic cultivation data generation and crop yield prediction pipeline.
@@ -44,3 +45,6 @@ src/myflora/generator/
     cli.py         # `myflora-generate` entry point
 tests/generator/   # mirrors the module layout above
 ```
+=======
+# myfloradna-portfolio
+>>>>>>> 0c9fc07262b3f81d08ebca28a0ce26e0c286f125
