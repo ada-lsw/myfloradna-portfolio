@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pip install -e \".[dev]\")",
+      "Bash(python -m pytest -q)",
+      "Bash(time python -m myflora.generator.cli --n-batches 60 --master-seed 42 --output-dir data/raw)",
+      "Bash(python -)",
+      "Bash(myflora-generate --n-batches 3 --output-dir data/interim)",
+      "Bash(rm -rf data/interim)",
+      "Bash(rmdir data/interim)"
+    ]
+  }
+}
