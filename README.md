@@ -1,8 +1,9 @@
 # myflora-dna-portfolio
 
 Synthetic cultivation data generation and crop yield prediction pipeline.
-See [SPEC.md](SPEC.md) for the full project plan. Phase 1 (synthetic data
-generator) is implemented; later phases are not yet built.
+See [SPEC.md](SPEC.md) for the full project plan. Phases 1-3 (synthetic
+data generator, validation suite, feature engineering) are implemented;
+later phases are not yet built.
 
 ## Setup
 
@@ -74,5 +75,45 @@ src/myflora/validation/
     plausibility.py     # bounds/NaN-rate checks vs. each batch's fault_rate
     reproducibility.py  # DataFrame hashing + bit-exact reproducibility check
 tests/validation/        # mirrors the module layout above
+```
+
+## Engineer batch-level features
+
+```
+python -m myflora.features.cli --readings-path data/raw/readings.parquet --metadata-path data/raw/batch_metadata.parquet --output-path data/interim/batch_features.parquet
+```
+
+or the installed console script: `myflora-features` (same options).
+
+Writes one row per `batch_id` to `batch_features.parquet`, ready to join
+with a yield label on `batch_id`. Per sensor: rolling-window mean/std
+(`{sensor}_rolling_mean`/`_std`, window in `FeatureConfig.rolling_window_hours`,
+default 24h), stress-event count/fraction outside the sensor's optimal
+band (`{sensor}_stress_event_count`/`_fraction`, using
+`SensorSpec.target_low`/`target_high`), and fraction of readings within
+`FeatureConfig.near_target_sigma_multiplier` (default 2) multiples of
+`SensorSpec.sigma` of the batch's own target (`{sensor}_frac_near_target`).
+Plus `degree_days_above_optimal`/`degree_days_below_optimal` (temperature
+exposure past `target_high`/`target_low`, in degC-days) and
+`light_integral_mol_m2` (cumulative PPFD exposure). All thresholds reuse
+existing `SensorSpec` fields rather than introducing new magic numbers.
+NaN (dropout-faulted) readings are excluded rather than counted as
+stress. The sampling interval is inferred from each batch's own
+timestamps, so it works regardless of `--interval-minutes` at generation
+time.
+
+Note: since PPFD's optimal band is the same `[target_low, target_high]`
+used for setpoint targets, nightly near-zero PPFD (by design, not a
+fault) also counts toward `ppfd_stress_event_count` -- expect that
+feature to run high and read it as "time outside the target light band"
+rather than literally "sensor malfunction."
+
+```
+src/myflora/features/
+    config.py    # FeatureConfig: rolling window size, near-target tolerance
+    engineer.py  # compute_batch_features / compute_feature_table
+    io.py        # Parquet read/write helpers
+    cli.py       # `myflora-features` entry point
+tests/features/  # mirrors the module layout above
 ```
 

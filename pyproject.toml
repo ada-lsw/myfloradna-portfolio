@@ -16,6 +16,7 @@ dev = ["pytest>=7.4"]
 
 [project.scripts]
 myflora-generate = "myflora.generator.cli:main"
+myflora-features = "myflora.features.cli:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
